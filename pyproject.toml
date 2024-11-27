@@ -5,7 +5,7 @@ description = "A queueing tool based on DESimpy."
 authors = [
     {name = "galenseilis", email = "galen.seilis@seilis.ca"},
 ]
-dependencies = []
+dependencies = ["desimpy>=0.48.0", "simdist>=0.1.1"]
 requires-python = ">=3.12"
 readme = "README.md"
 license = {text = "Apache-2.0"}
