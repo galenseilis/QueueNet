@@ -1,21 +1,26 @@
-from typing import Self
-from collections.abc import Callable
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Self
+    from collections.abc import Callable
 
 from simdist import dists
 
 from desimpy import EventScheduler
 
 
-class Customer:
-    """Class representing a customer in the queueing system."""
+class Flowable:
+    """Class representing a flowable in the queueing system."""
 
-    def __init__(self, customer_id: int, arrival_time: float) -> None:
-        self.customer_id: int = customer_id
+    def __init__(self, flowable_id: int, arrival_time: float) -> None:
+        self.flowable_id: int = flowable_id
         self.arrival_time: float = arrival_time
         self.service_start_time: float | None = None
         self.departure_time: float | None = None
         self.current_node: Node | None = (
-            None  # Track the current node (queue) for the customer
+            None  # Track the current node (queue) for the flowable
         )
 
 
@@ -37,20 +42,20 @@ class Node:
         self.scheduler: EventScheduler = (
             scheduler  # Shared event scheduler for the network
         )
-        self.queue: list[Customer] = []  # Queue for customers
-        self.servers: list[Customer | None] = [
+        self.queue: list[Flowable] = []  # Queue for flowables
+        self.servers: list[Flowable | None] = [
             None
         ] * self.num_servers  # Track server status
-        self.total_customers: int = (
-            0  # FIX: Total number of customers should be tracked by Network.
+        self.total_flowables: int = (
+            0  # FIX: Total number of flowables should be tracked by Network.
         )
         self.routing_func: Callable[[], Self] = (
-            routing_func  # Function to route customers to other queues
+            routing_func  # Function to route flowables to other queues
         )
         self.depart_dist: dists.Distribution = depart_dist
 
     def schedule_arrival(self, inter_arrival_time: float | None = None) -> None:
-        """Schedule the next customer arrival."""
+        """Schedule the next flowable arrival."""
         if inter_arrival_time is None:
             inter_arrival_time: float = self.arrival_dist.sample()
         self.scheduler.timeout(
@@ -63,23 +68,23 @@ class Node:
             },
         )
 
-    def handle_arrival(self):  # FIX: Pass optional customer
-        """Handle a customer arrival."""
-        customer = Customer(
-            self.total_customers, self.scheduler.current_time
-        )  # FIX: Create customer only if not provided.
-        self.total_customers += 1
-        customer.current_node = self.queue_id  # Track the customer's current queue
+    def handle_arrival(self):  # FIX: Pass optional flowable
+        """Handle a flowable arrival."""
+        flowable = Flowable(
+            self.total_flowables, self.scheduler.current_time
+        )  # FIX: Create flowable only if not provided.
+        self.total_flowables += 1
+        flowable.current_node = self.queue_id  # Track the flowable's current queue
 
         free_server = self.find_free_server()
 
         if free_server is not None:
-            self.start_service(customer, free_server)
+            self.start_service(flowable, free_server)
         else:
-            self.queue.append(customer)
+            self.queue.append(flowable)
 
         # Schedule the next arrival for the same queue
-        self.schedule_arrival()  # FIX: Pass customer
+        self.schedule_arrival()  # FIX: Pass flowable
 
     def find_free_server(self):
         """Find an available server."""
@@ -88,11 +93,11 @@ class Node:
                 return i
         return None
 
-    def start_service(self, customer: Customer, server_id: int):
-        """Start service for a customer at a given server."""
+    def start_service(self, flowable: Flowable, server_id: int):
+        """Start service for a flowable at a given server."""
         service_time: float = self.service_dist.sample()
-        customer.service_start_time = self.scheduler.current_time
-        self.servers[server_id] = customer  # Mark the server as busy
+        flowable.service_start_time = self.scheduler.current_time
+        self.servers[server_id] = flowable  # Mark the server as busy
 
         action: Callable[[], None] = lambda: self.handle_departure(server_id)
         context = {
@@ -100,29 +105,29 @@ class Node:
             "schedule_time": self.scheduler.current_time,
             "queue_id": self.queue_id,
             "server": server_id,
-            "customer_id": customer.customer_id,
+            "flowable_id": flowable.flowable_id,
         }
         # Schedule the departure event
         self.scheduler.timeout(service_time, action=action, context=context)
 
     def handle_departure(self, server_id: int):
-        """Handle the departure of a customer from a given server."""
-        customer = self.servers[server_id]
-        customer.departure_time = self.scheduler.current_time
+        """Handle the departure of a flowable from a given server."""
+        flowable = self.servers[server_id]
+        flowable.departure_time = self.scheduler.current_time
         self.servers[server_id] = None  # Free the server
 
-        wait_time: float = customer.service_start_time - customer.arrival_time
+        wait_time: float = flowable.service_start_time - flowable.arrival_time
 
         if self.queue:
-            next_customer = self.queue.pop(0)
-            self.start_service(next_customer, server_id)
+            next_flowable = self.queue.pop(0)
+            self.start_service(next_flowable, server_id)
 
-        # Route the customer to the next queue (or complete their journey)
+        # Route the flowable to the next queue (or complete their journey)
         next_node: Node | None = self.routing_func(self)
         if next_node is not None:
-            # Route the customer to the next node in the network
-            next_node.schedule_arrival(  # FIX: Pass customer to be reused.
-                inter_arrival_time=self.depart_dist.sample()  # FIX: Pass customer and self to sample
+            # Route the flowable to the next node in the network
+            next_node.schedule_arrival(  # FIX: Pass flowable to be reused.
+                inter_arrival_time=self.depart_dist.sample()  # FIX: Pass flowable and self to sample
             )
 
 
